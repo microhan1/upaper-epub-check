@@ -23,7 +23,8 @@ This file provides guidance to Claude Code when working with code in this reposi
 - **표지 탐지 순서**: `<meta name="cover">` → `properties="cover-image"` → guide type=cover → 첫 spine 문서의 단일 이미지 → id/href 에 cover. 첫 spine 문서가 표지가 아니면 오류.
 - **비권장 태그(ul/li/table)는 파일별이 아니라 태그별로 한 건**으로 묶어 보고한다(승인된 책도 table 42개를 쓰고 통과했으므로 경고 등급 유지).
 - 검정 글자색 정규식은 `background-color:#000` 을 잡지 않도록 `(?<![-\w])color` 를 쓴다. 테스트에 회귀 케이스 있음.
-- EXE 빌드는 `upaper_check.spec`(onefile, console) — `default_rules.json` 을 `upaper_check/` 밑에 datas 로 싣는다. 경로를 바꾸면 `context.DEFAULT_RULES_PATH` 도 같이.
+- EXE 빌드는 `upaper_check.spec`(onefile, console=False) — `default_rules.json` 을 `upaper_check/` 밑에 datas 로 싣는다. 경로를 바꾸면 `context.DEFAULT_RULES_PATH` 도 같이.
+- **릴리스 절차**: 태그 `vX.Y.Z` 로 `gh release create`, 자산은 **두 개** — 버전 붙은 `upaper-epub-check_vX.Y.Z.zip` 과 버전 없는 `upaper-epub-check.zip`. 블로그·README 는 `releases/latest/download/upaper-epub-check.zip` 고정 주소를 쓰므로 **버전 없는 이름을 빠뜨리면 링크가 깨진다**. 자산 파일명은 영문(한글 파일명은 gh 업로드가 실패함), 표시 이름은 `경로#라벨` 로 한글 가능. 커밋 이메일은 GitHub noreply(저장소 git config 에 설정됨) — 개인 이메일이면 push 가 거부된다.
 
 ## 공통 원칙 (책갈피 프로젝트와 동일)
 
