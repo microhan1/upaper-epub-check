@@ -1,0 +1,29 @@
+{
+  "_설명": "유페이퍼 검수 기준(2015.01.12) + 유페이퍼 도움말 기준. --rules 옵션으로 이 파일을 복사·수정해 덮어쓸 수 있습니다.",
+  "epub_version_expected": "2.0",
+  "publisher_expected": "유페이퍼",
+  "cover": {
+    "min_width": 600,
+    "max_width": 1000,
+    "recommended_width": 700,
+    "recommended_height": 1000,
+    "recommended_formats": ["image/jpeg"]
+  },
+  "limits": {
+    "max_epub_bytes": 31457280,
+    "max_html_bytes": 307200,
+    "max_spine_docs": 100,
+    "max_toc_depth": 3,
+    "empty_doc_min_chars": 1
+  },
+  "colophon": {
+    "page_keywords": ["판권", "펴낸곳", "발행처", "발행일", "출간일", "ISBN", "정가", "펴낸이", "초판", "발행인"],
+    "min_keyword_hits": 3,
+    "expect_near_end": 3
+  },
+  "tags": {
+    "forbidden": ["script", "iframe", "object", "embed", "applet", "form", "input", "button", "select", "textarea", "video", "audio", "canvas", "frame", "frameset", "noscript", "base", "marquee", "blink"],
+    "unsupported_epub2": ["svg", "math", "nav", "section", "article", "aside", "header", "footer", "figure", "figcaption", "main"],
+    "discouraged": ["ul", "ol", "li", "table"]
+  }
+}

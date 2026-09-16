@@ -1,0 +1,9 @@
+build/
+dist/
+.preview/
+__pycache__/
+*.pyc
+tests/fixtures/
+*_검수보고서.html
+*_검수보고서.json
+docs/*블로그_*
