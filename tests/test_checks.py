@@ -38,8 +38,10 @@ class FixtureTest(unittest.TestCase):
         cls.tmp = tempfile.TemporaryDirectory()
         cls.good = os.path.join(cls.tmp.name, "good.epub")
         cls.bad = os.path.join(cls.tmp.name, "bad.epub")
+        cls.spaced = os.path.join(cls.tmp.name, "spaced.epub")
         make_fixtures.good_epub(cls.good)
         make_fixtures.bad_epub(cls.bad)
+        make_fixtures.spaced_colophon_epub(cls.spaced)
 
     @classmethod
     def tearDownClass(cls):
@@ -126,6 +128,48 @@ class BadEpubTest(FixtureTest):
 
     def test_cli_exit_code_one(self):
         self.assertEqual(main([self.bad, "--quiet"]), 1)
+
+
+class SpacedColophonTest(FixtureTest):
+    """'펴 낸 날'처럼 자간을 벌린 판권도 찾아내야 한다 (v0.2.3 회귀)."""
+
+    def setUp(self):
+        self.findings = run(self.spaced)
+
+    def test_colophon_is_detected(self):
+        found = codes(self.findings)
+        self.assertNotIn("COLOPHON-MISSING", found)
+        self.assertNotIn("COLOPHON-IMAGE", found)
+
+    def test_no_date_finding(self):
+        dates = [f"{f.level.name} {f.message}" for f in self.findings if f.code == "COLOPHON-DATE"]
+        self.assertEqual(dates, [])
+
+    def test_no_errors(self):
+        errors = [f for f in self.findings if f.level == Level.ERROR]
+        self.assertEqual(errors, [], [f"{f.code}: {f.message}" for f in errors])
+
+
+class DateLabelTest(unittest.TestCase):
+    """날짜 표기 정규식 — 자간을 벌린 '펴 낸 날'까지 잡되, 본문 낱말은 잡지 않아야 한다."""
+
+    def test_spaced_date_labels_match(self):
+        from upaper_check.checks.colophon import DATE_LABEL, STRICT_DATE_LABEL
+        for text in ("펴낸날 2026년 9월 1일", "펴낸 날 2026년 9월 1일", "펴 낸 날 2026년 9월 1일",
+                     "펴 낸 날 짜 2026.9.1", "발 행 년 월 일 2026. 9. 1.", "출 간 일 2026-09-01"):
+            self.assertTrue(DATE_LABEL.search(text), text)
+            self.assertTrue(STRICT_DATE_LABEL.search(text), text)
+
+    def test_spaced_date_label_alone_is_hard_datum(self):
+        """정가·ISBN·연락처가 없어도 '펴 낸 날 + 날짜'만으로 판권 후보가 되어야 한다."""
+        from upaper_check.checks.colophon import _has_hard_datum
+        self.assertTrue(_has_hard_datum("펴 낸 날 2026년 9월 1일"))
+        self.assertFalse(_has_hard_datum("펴 낸 날"))
+
+    def test_body_words_not_taken_as_date_label(self):
+        from upaper_check.checks.colophon import DATE_LABEL
+        for text in ("최초 판단은 옳았다", "그는 발을 헛디뎠다", "출장 간 일이 있었다"):
+            self.assertIsNone(DATE_LABEL.search(text), text)
 
 
 class TitleMatchTest(unittest.TestCase):

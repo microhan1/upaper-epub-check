@@ -103,6 +103,25 @@ def good_epub(path: str) -> None:
     write_epub(path, files)
 
 
+def spaced_colophon_epub(path: str) -> None:
+    """판권 항목을 '펴 낸 날'처럼 자간을 벌려 적은 책 — 이 표기도 판권으로 잡혀야 한다."""
+    spine = ["cover", "ch1", "copyright"]
+    files = {
+        "META-INF/container.xml": CONTAINER,
+        "OEBPS/content.opf": opf("2.0", "유페이퍼", spine),
+        "OEBPS/toc.ncx": ncx([("표지", "cover.xhtml"), ("1장", "ch1.xhtml"), ("판권", "copyright.xhtml")]),
+        "OEBPS/style.css": "body { line-height: 1.7; } h1 { font-size: 1.4em; color: #2C2822; }",
+        "OEBPS/cover.jpg": jpeg(700, 1000),
+        "OEBPS/cover.xhtml": xhtml("표지", '<div><img src="cover.jpg" alt="표지"/></div>'),
+        "OEBPS/ch1.xhtml": xhtml("1장", "<h1>1장</h1><p>본문입니다. 하늘은 왜 파랄까요.</p>"),
+        # 제목·파일명에 '판권'이 없어 구조 신호만으로 찾아내야 하는 페이지
+        "OEBPS/copyright.xhtml": xhtml("간기", "<p>테스트 도서</p><p>지 은 이 홍길동</p>"
+                                       "<p>펴 낸 날 2026년 9월 1일</p><p>펴 낸 곳 유페이퍼</p>"
+                                       "<p>정 가 5,900원</p><p>ISBN 979-11-6811-999-4</p>"),
+    }
+    write_epub(path, files)
+
+
 def bad_epub(path: str) -> None:
     spine = ["ch1", "cover", "cover2", "empty", "copyright", "copyright2", "last"]
     extra = '<item id="unused" href="unused.jpg" media-type="image/jpeg"/>' \
@@ -134,4 +153,5 @@ if __name__ == "__main__":
     os.makedirs(OUT_DIR, exist_ok=True)
     good_epub(os.path.join(OUT_DIR, "good.epub"))
     bad_epub(os.path.join(OUT_DIR, "bad.epub"))
+    spaced_colophon_epub(os.path.join(OUT_DIR, "spaced.epub"))
     print("fixtures written to", OUT_DIR)

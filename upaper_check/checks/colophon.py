@@ -14,8 +14,16 @@ MAX_COLOPHON_CHARS = 6000   # 판권 페이지는 짧다 — 긴 본문 장(章)
 HEADING_CHARS = 40          # 본문 첫머리 이만큼을 제목으로 간주
 TAIL_DOCS_FOR_IMAGE_COLOPHON = 3
 CONTACT_INFO = re.compile(r"(출판등록|등록번호|등록\s*[:：|]|전자우편|이메일|e-?mail|홈페이지|팩스|전화\s*[:：|]?\s*\d)", re.IGNORECASE)
+
+
+def _spaced(*words: str) -> str:
+    """글자 사이 공백을 허용하는 대안 패턴 — 판권은 '펴 낸 날'처럼 자간을 벌려 적는 일이 잦다."""
+    return "|".join(r"\s*".join(word) for word in words)
+
+
+DATE_WORDS = ("발행일", "발행년월일", "출간일", "펴낸날")   # 자간 벌린 표기까지 허용할 날짜 표기
 STRICT_DATE_LABEL = re.compile(
-    r"(발행일|발\s*행\s*일|초판|1판|펴낸날|펴낸\s*날|출간일|발행년월일|(인쇄|발\s*행|출간)\s*[:：|]?\s*(19|20)\d{2})")
+    rf"({_spaced(*DATE_WORDS)}|초판|1판|(인쇄|발\s*행|출간)\s*[:：|]?\s*(19|20)\d{{2}})")
 HARD_CONTACT = re.compile(r"(출판등록|등록번호|팩스|전화\s*[:：|]?\s*\d)")   # 본문에 흔한 '이메일·홈페이지'는 제외
 MIN_CHUNK_CHARS = 4
 TITLE_SPLIT = re.compile(r"[\s:：\-—_|,()\[\]（）]+")
@@ -23,7 +31,7 @@ TITLE_SPLIT = re.compile(r"[\s:：\-—_|,()\[\]（）]+")
 TITLE_LABEL = re.compile(r"(도서명|책\s*제목|서\s*명|제\s*목)\s*[:：|]")
 AUTHOR_LABEL = re.compile(r"(지은이|지\s*은\s*이|저\s*자|글쓴이|지음|엮은이|저술|작가|저\s*:)")
 PUBLISHER_LABEL = re.compile(r"(펴낸곳|펴\s*낸\s*곳|발행처|발\s*행\s*처|출판사|출\s*판\s*사|발행인|발\s*행\s*인|펴낸이|펴\s*낸\s*이|출판)")
-DATE_LABEL = re.compile(r"(발행일|발\s*행\s*일|출간일|출\s*간\s*일|발행|초판|출간|펴낸날|펴낸\s*날|발행년월일)")
+DATE_LABEL = re.compile(rf"({_spaced(*DATE_WORDS)}|발행|초판|출간)")
 DATE_VALUE = re.compile(  # 연·월(·일). 월 1~12, 일 1~31 로 제한해 출판등록번호(제2006-000017호)를 날짜로 오인하지 않게
     r"(19|20)\d{2}\s*[.년/\-]\s*(0?[1-9]|1[0-2])(?!\d)\s*([.월/\-]\s*(0?[1-9]|[12]\d|3[01])(?!\d)\s*일?)?")
 PRICE_LABEL = re.compile(r"(정\s*가|값|가\s*격|판매가)\s*[:：]?\s*[\d,]+\s*원?")
