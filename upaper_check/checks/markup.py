@@ -4,6 +4,7 @@ from __future__ import annotations
 import re
 from collections import Counter
 
+from upaper_check.checks.images import is_external
 from upaper_check.context import Context
 from upaper_check.epub import ManifestItem, is_well_formed
 from upaper_check.findings import Finding, Level
@@ -133,6 +134,8 @@ def _check_lang(root, path: str) -> list[Finding]:
 def _check_stylesheet_links(ctx: Context, item: ManifestItem, root, path: str) -> list[Finding]:
     findings: list[Finding] = []
     for href in stylesheet_hrefs(root):
+        if is_external(href):   # 원격 CSS 는 EPUB 안에 없는 것이 정상이다
+            continue
         target = ctx.pkg.resolve_from(item, href)
         if not ctx.pkg.exists(target):
             findings.append(Finding("CSS-MISSING", Level.ERROR, f"연결된 스타일시트가 없습니다: {href}", path))

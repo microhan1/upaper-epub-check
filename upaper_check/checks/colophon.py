@@ -4,6 +4,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from upaper_check.checks.cover import find_cover_image
 from upaper_check.context import Context
 from upaper_check.epub import ManifestItem
 from upaper_check.findings import Finding, Level
@@ -71,6 +72,8 @@ def _missing(ctx: Context) -> list[Finding]:
     """텍스트 판권이 없을 때 — 끝부분에 이미지만 있는 페이지가 있으면 이미지 판권일 수 있으니 수동 확인으로."""
     docs = ctx.docs()
     for item in docs[-TAIL_DOCS_FOR_IMAGE_COLOPHON:]:
+        if _is_cover_page(ctx, item, docs):
+            continue
         root = ctx.root(item)
         if root is not None and image_srcs(root) and not ctx.text(item):
             return [Finding("COLOPHON-IMAGE", Level.MANUAL,
@@ -78,6 +81,18 @@ def _missing(ctx: Context) -> list[Finding]:
                             "도서명·저자명·출판사명·출간일·정가가 그림에 있는지 눈으로 확인하세요.", ctx.path(item))]
     return [Finding("COLOPHON-MISSING", Level.ERROR, "판권 페이지를 찾을 수 없습니다.", ctx.pkg.opf_path,
                     "도서명·저자명·출판사명·출간일·정가가 들어간 판권 페이지를 (가급적 맨 뒤에) 추가하세요.")]
+
+
+def _is_cover_page(ctx: Context, item, docs) -> bool:
+    """표지는 그림만 있는 페이지라 이미지 판권과 생김새가 같다 — 쪽수가 적은 책에서 서로 헷갈린다."""
+    if docs and item is docs[0]:
+        return True
+    cover = find_cover_image(ctx)
+    if cover is None:
+        return False
+    root = ctx.root(item)
+    cover_path = ctx.path(cover)
+    return root is not None and any(ctx.pkg.resolve_from(item, src) == cover_path for src in image_srcs(root))
 
 
 def find_candidates(ctx: Context) -> list[Candidate]:

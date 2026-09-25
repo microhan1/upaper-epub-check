@@ -14,6 +14,7 @@ from upaper_check.xhtml import image_srcs
 CMYK_MODE = "CMYK"
 CSS_URL = re.compile(r"url\(\s*['\"]?([^'\")]+)['\"]?\s*\)", re.IGNORECASE)
 IMAGE_SUFFIXES = (".jpg", ".jpeg", ".png", ".gif", ".svg", ".webp", ".bmp")
+EXTERNAL_PREFIXES = ("http://", "https://", "data:", "//", "mailto:")
 
 
 def check(ctx: Context) -> list[Finding]:
@@ -25,20 +26,30 @@ def check(ctx: Context) -> list[Finding]:
     return findings
 
 
+def is_external(src: str) -> bool:
+    """EPUB 안의 파일이 아닌 참조 — 원격 주소나 본문에 박아 넣은 data URI.
+
+    합친 경로로 판단하면 늦다. 'https://…' 를 폴더 경로와 합치면 평범한 상대 경로처럼 보여서
+    '파일이 없다'는 오류로 잘못 잡힌다."""
+    return src.strip().lower().startswith(EXTERNAL_PREFIXES)
+
+
 def _referenced_paths(ctx: Context) -> dict[str, list[str]]:
     """참조된 ZIP 경로 → 참조한 문서 목록 (본문 <img> 와 CSS url() 모두)."""
     refs: dict[str, list[str]] = {}
     for doc in ctx.docs():
         root = ctx.root(doc)
         for src in image_srcs(root):
-            refs.setdefault(ctx.pkg.resolve_from(doc, src), []).append(ctx.path(doc))
+            if not is_external(src):
+                refs.setdefault(ctx.pkg.resolve_from(doc, src), []).append(ctx.path(doc))
     for item in ctx.pkg.manifest.values():
         path = ctx.path(item)
         if not item.is_css or not ctx.pkg.exists(path):
             continue
         css = ctx.pkg.read(path).decode("utf-8", errors="replace")
         for url in CSS_URL.findall(css):
-            refs.setdefault(ctx.pkg.resolve(url, posixpath.dirname(path)), []).append(path)
+            if not is_external(url):
+                refs.setdefault(ctx.pkg.resolve(url, posixpath.dirname(path)), []).append(path)
     return refs
 
 
@@ -54,8 +65,6 @@ def _check_references(ctx: Context, referenced: dict[str, list[str]]) -> list[Fi
     manifest_paths = {ctx.path(item) for item in ctx.pkg.manifest.values()}
     findings: list[Finding] = []
     for target, users in referenced.items():
-        if target.startswith(("http://", "https://", "data:")):
-            continue
         location = users[0]
         if not ctx.pkg.exists(target):
             findings.append(_missing_finding(target, location))

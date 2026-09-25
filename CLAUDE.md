@@ -9,7 +9,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 - 스택: Python 3.10+ · lxml · Pillow · (빌드) PyInstaller. 외부 서비스 없음, 네트워크 없음.
 - 실행: `python upaper_check.py 책.epub [--html] [--json] [--publisher NAME] [--rules JSON] [--epubcheck JAR]`. 인자 없으면 끌어다 놓기 창(`gui.py`, tkinterdnd2). `UPAPER_SELFTEST=1` 로 실행하면 창을 만들었다 닫고 `dnd:available` 여부만 출력한다 — EXE 빌드 후 반드시 이걸로 드롭 모듈이 실렸는지 확인. EXE 는 창 모드(console=False)라 stdout 이 없으므로 `UPAPER_SELFTEST=결과.txt` 처럼 파일 경로를 주면 거기에 쓴다.
 - 창 모드 EXE 에서 `print` 는 조용히 버려진다. 사용자에게 보여야 하는 것은 `cli._windowed()` 분기에서 보고서 열기·메시지 상자로 처리한다.
-- 테스트: `python -m unittest discover -s tests -v` — `tests/make_fixtures.py` 가 good/bad EPUB 을 생성해 규칙별로 검증한다. **규칙을 추가·변경하면 bad.epub 에 위반 사례를 넣고 테스트를 함께 고친다.**
+- 테스트: `python -m unittest discover -s tests -v` (120개). `tests/builders.py` 의 `Book()` 은 기본값이 규정을 지키는 EPUB 이고, **시험할 항목만 바꿔** 조립한다(`Book(publisher="홍길동")`, `Book(cover_image=None)` = 표지 없음, `Book(mimetype_stored=False)` 등). `tests/helpers.py` 의 `BookTest` 를 상속해 `self.check(book, **규칙덮어쓰기)` 로 findings 를 받고 `assertCode`/`assertNoCode`/`assertClean` 로 단언한다. **규칙을 추가·변경하면 그 규칙만 어긋난 책으로 시험을 하나 더 만든다** — 위반을 한 파일에 몰아넣으면 다른 규칙이 망가져도 드러나지 않는다.
 - 실전 기준 파일: 유페이퍼 승인(2026-09-05)된 `D:\my\PDF To Epub\dist\스캔북 컨버터\doc\하늘은 왜 파래요 - microhan.epub` 은 **오류 0 으로 통과해야 한다**(회귀 기준). 규칙을 바꾸면 이 파일로도 돌려 본다.
 
 ## Non-Obvious Rules
@@ -23,6 +23,8 @@ This file provides guidance to Claude Code when working with code in this reposi
 - 상용 EPUB 대량 테스트 방법: `C:\Users\micro\Desktop\Books\*.epub`(167권)을 돌려 코드별 파일 수를 보고, 갑자기 늘어난 코드는 오탐을 의심한다. 상용본은 출판사명·정가·검정 글자색 때문에 대부분 "수정 필요"가 정상이다.
 - **표지 탐지 순서**: `<meta name="cover">` → `properties="cover-image"` → guide type=cover → 첫 spine 문서의 단일 이미지 → id/href 에 cover. 첫 spine 문서가 표지가 아니면 오류.
 - **비권장 태그(ul/li/table)는 파일별이 아니라 태그별로 한 건**으로 묶어 보고한다(승인된 책도 table 42개를 쓰고 통과했으므로 경고 등급 유지).
+- **EPUB 밖을 가리키는 참조**(`https://`, `data:`, `//`)는 경로를 합치기 **전에** `images.is_external()` 로 거른다. 합친 뒤 판단하면 원격 주소가 상대 경로처럼 보여 '파일 없음' 오탐이 난다(v0.2.4).
+- **이미지 전용 판권(COLOPHON-IMAGE) 후보에서 표지를 제외**한다 — 쪽수가 적은 책은 표지가 끝부분 3쪽 안에 들어와 판권 없음(오류)을 수동확인으로 약화시킨다(v0.2.4).
 - 검정 글자색 정규식은 `background-color:#000` 을 잡지 않도록 `(?<![-\w])color` 를 쓴다. 테스트에 회귀 케이스 있음.
 - EXE 빌드는 `upaper_check.spec`(onefile, console=False) — `default_rules.json` 을 `upaper_check/` 밑에 datas 로 싣는다. 경로를 바꾸면 `context.DEFAULT_RULES_PATH` 도 같이.
 - **릴리스 절차**: 태그 `vX.Y.Z` 로 `gh release create`, 자산은 **두 개** — 버전 붙은 `upaper-epub-check_vX.Y.Z.zip` 과 버전 없는 `upaper-epub-check.zip`. 블로그·README 는 `releases/latest/download/upaper-epub-check.zip` 고정 주소를 쓰므로 **버전 없는 이름을 빠뜨리면 링크가 깨진다**. 자산 파일명은 영문(한글 파일명은 gh 업로드가 실패함), 표시 이름은 `경로#라벨` 로 한글 가능. 커밋 이메일은 GitHub noreply(저장소 git config 에 설정됨) — 개인 이메일이면 push 가 거부된다.
