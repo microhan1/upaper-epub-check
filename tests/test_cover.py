@@ -65,6 +65,11 @@ class CoverPlacementTest(BookTest):
         book = Book(assets=[other], docs=[cover_doc(href="front.jpg"), Doc("ch1"), colophon_doc()])
         self.assertEqual(self.assertCode(self.check(book), "COVER-FIRST").level, Level.INFO)
 
+    def test_page_whose_only_image_is_missing_is_not_a_cover(self):
+        """깨진 그림 한 장짜리 첫 장을 표지로 쳐 주면 반려 사유가 정보로 약해진다."""
+        book = Book(docs=[Doc("ch1", body='<p>본문</p><img src="gone.jpg" alt=""/>'), cover_doc(), colophon_doc()])
+        self.assertEqual(self.assertCode(self.check(book), "COVER-FIRST").level, Level.ERROR)
+
     def test_same_cover_image_in_two_documents(self):
         book = Book(docs=[cover_doc(), cover_doc("cover2"), Doc("ch1"), colophon_doc()])
         self.assertCode(self.check(book), "COVER-DUP", Level.ERROR)

@@ -21,6 +21,8 @@ This file provides guidance to Claude Code when working with code in this reposi
 - **날짜 정규식**(`DATE_VALUE`)은 월 1~12·일 1~31 로 제한 — 출판등록번호 "제2006-000017호"가 날짜로 잡히던 문제.
 - **날짜 표기**(`DATE_WORDS` + `_spaced()`)는 "펴 낸 날"처럼 자간을 벌린 표기까지 잡는다(v0.2.3). 다만 자간 허용은 `발행일·발행년월일·출간일·펴낸날` 같은 **긴 낱말에만** — `초판`·`발행`·`출간` 에까지 넓히면 본문의 "최초 판단"이 `초\s*판` 에 걸린다.
 - 상용 EPUB 대량 테스트 방법: `C:\Users\micro\Desktop\Books\*.epub`(167권)을 돌려 코드별 파일 수를 보고, 갑자기 늘어난 코드는 오탐을 의심한다. 상용본은 출판사명·정가·검정 글자색 때문에 대부분 "수정 필요"가 정상이다.
+- **표지 페이지 판정**(`cover._is_cover_page`)은 그림 한 장 + 글자 40자 이하 + **그 그림이 실제로 존재**. 존재 조건을 빼면 깨진 그림짜리 첫 장이 표지로 인정돼 COVER-FIRST 가 오류에서 정보로 약해진다(v0.2.5).
+- **여러 권 검사 시 `--html`/`--json` 에 경로 지정 금지**(`cli._reject_shared_report_path`) — 뒤 책이 앞 책 보고서를 덮어쓴다(v0.2.5).
 - **표지 탐지 순서**: `<meta name="cover">` → `properties="cover-image"` → guide type=cover → 첫 spine 문서의 단일 이미지 → id/href 에 cover. 첫 spine 문서가 표지가 아니면 오류.
 - **비권장 태그(ul/li/table)는 파일별이 아니라 태그별로 한 건**으로 묶어 보고한다(승인된 책도 table 42개를 쓰고 통과했으므로 경고 등급 유지).
 - **EPUB 밖을 가리키는 참조**(`https://`, `data:`, `//`)는 경로를 합치기 **전에** `images.is_external()` 로 거른다. 합친 뒤 판단하면 원격 주소가 상대 경로처럼 보여 '파일 없음' 오탐이 난다(v0.2.4).

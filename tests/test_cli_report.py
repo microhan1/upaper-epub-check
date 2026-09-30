@@ -96,6 +96,21 @@ class CommandLineTest(BookTest):
         run_cli(self.build(), "--html", html, "--json", js, "--quiet", "--no-epubcheck")
         self.assertTrue(os.path.isfile(html) and os.path.isfile(js))
 
+    def test_shared_report_path_for_several_books_is_rejected(self):
+        """경로를 하나로 주면 뒤 책이 앞 책 보고서를 덮어쓴다 — 조용히 잃지 않도록 막는다."""
+        books = [self.build(name="a.epub"), self.build(name="b.epub")]
+        for option in ("--json", "--html"):
+            with self.subTest(option=option), contextlib.redirect_stderr(io.StringIO()) as err:
+                with self.assertRaises(SystemExit):
+                    run_cli(*books, option, self.path("one.json"), "--quiet", "--no-epubcheck")
+                self.assertIn("덮어씁니다", err.getvalue())
+
+    def test_auto_named_reports_for_several_books(self):
+        books = [self.build(name="a.epub"), self.build(name="b.epub")]
+        run_cli(*books, "--json", "--quiet", "--no-epubcheck")
+        for name in ("a", "b"):
+            self.assertTrue(os.path.isfile(self.path(f"{name}_검수보고서.json")), name)
+
     def test_publisher_options(self):
         book = Book(publisher="내출판사",
                     docs=[cover_doc(), Doc("ch1"),

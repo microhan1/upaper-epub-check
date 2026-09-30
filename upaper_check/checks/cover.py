@@ -79,10 +79,15 @@ def _image_item_of(ctx: Context, doc: ManifestItem) -> ManifestItem | None:
 
 
 def _is_cover_page(ctx: Context, doc: ManifestItem) -> bool:
+    """그림 한 장에 글자가 거의 없는 페이지. 그 그림이 실제로 들어 있어야 표지 구실을 한다 —
+    깨진 이미지를 표지로 쳐 주면 '첫 장이 표지가 아니다'라는 반려 사유가 정보로 약해진다."""
     root = ctx.root(doc)
     if root is None:
         return False
-    return len(image_srcs(root)) == 1 and len(ctx.text(doc)) <= COVER_PAGE_MAX_TEXT
+    srcs = image_srcs(root)
+    if len(srcs) != 1 or len(ctx.text(doc)) > COVER_PAGE_MAX_TEXT:
+        return False
+    return ctx.pkg.exists(ctx.pkg.resolve_from(doc, srcs[0]))
 
 
 def _docs_showing(ctx: Context, cover: ManifestItem) -> list[ManifestItem]:

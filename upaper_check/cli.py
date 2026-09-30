@@ -54,13 +54,26 @@ def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if not argv:
         return _run_gui()
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    _reject_shared_report_path(parser, args)
     rules = _rules_from_args(args)
     worst = EXIT_PASS
     for epub_path in args.epub:
         code = _check_one(epub_path, rules, args)
         worst = max(worst, code)
     return worst
+
+
+def _reject_shared_report_path(parser: argparse.ArgumentParser, args) -> None:
+    """여러 권 + 보고서 경로 지정 = 뒤 책이 앞 책 보고서를 덮어쓴다. 조용히 잃느니 막는다."""
+    if len(args.epub) < 2:
+        return
+    fixed = [name for name, value in (("--html", args.html), ("--json", args.json))
+             if value not in (None, AUTO)]
+    if fixed:
+        parser.error(f"여러 권을 한 번에 검사할 때는 {', '.join(fixed)} 에 경로를 지정할 수 없습니다 "
+                     f"(뒤 책이 앞 책 보고서를 덮어씁니다). 경로 없이 {fixed[0]} 만 쓰면 책마다 그 옆에 만듭니다.")
 
 
 def _run_gui() -> int:
