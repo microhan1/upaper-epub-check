@@ -78,7 +78,7 @@ tests/                     픽스처 생성기 + 단위 테스트
 
 ## 함께 보기
 
-- [책갈피 라이브러리](https://chaekgalpi.co.kr/?utm_source=github&utm_medium=referral&utm_campaign=tool_cta&utm_content=upaperepub) — 같은 사람이 만든 독서 기록 웹 서비스. 읽은 책과 독서록을 남길 수 있습니다.
+- [책갈피 라이브러리](https://chaekgalpi.co.kr/tools/upaperepub?utm_source=github&utm_medium=referral&utm_campaign=tool_cta&utm_content=upaperepub) — 같은 사람이 만든 독서 기록 웹 서비스. 읽은 책과 독서록을 남길 수 있습니다.
 
 ## 라이선스
 
