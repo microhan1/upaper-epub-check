@@ -9,3 +9,4 @@ tests/fixtures/
 docs/*블로그_*
 docs/캡처/
 .skill-workspace/
+settings.json

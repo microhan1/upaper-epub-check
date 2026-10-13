@@ -12,6 +12,10 @@ from typing import Callable
 import tkinter as tk
 from tkinter import filedialog, scrolledtext
 
+from upaper_check import __version__ as APP_VERSION
+from upaper_check import prefs as prefs_mod
+from upaper_check import update_check
+
 try:
     from tkinterdnd2 import DND_FILES, TkinterDnD
     DND_AVAILABLE = True
@@ -20,7 +24,7 @@ except ImportError:  # pragma: no cover - 배포본에는 항상 포함
 
 FILE_TYPES = [("EPUB 파일", "*.epub"), ("모든 파일", "*.*")]
 TITLE = "유페이퍼 EPUB 검수"
-WINDOW_SIZE = "640x560"
+WINDOW_SIZE = "640x640"   # 선택 줄·새 버전 알림 줄이 생겨도 기록 칸이 여섯 줄 넘게 남도록
 EPUB_SUFFIX = ".epub"
 COLOR = {"paper": "#FAF6EF", "ink": "#2C2822", "brown": "#6B4F3B", "gold": "#C9A66B",
          "red": "#8E2B2B", "green": "#2F5D2A", "muted": "#6B6257", "zone": "#F5F1E8"}
@@ -33,17 +37,27 @@ CheckFn = Callable[[str], tuple[str, str, bool]]
 
 
 class DropWindow:
-    def __init__(self, check_fn: CheckFn):
+    def __init__(self, check_fn: CheckFn, *, prefs_path: str | None = None, check_updates: bool = True,
+                 fetcher: Callable | None = None):
+        """prefs_path·fetcher 는 시험용 — 사용자 설정 파일과 실제 서버를 건드리지 않고 돌리기 위해."""
         self.check_fn = check_fn
+        self.prefs_path = prefs_path
+        self.prefs = prefs_mod.load(prefs_path)
         self.root = TkinterDnD.Tk() if DND_AVAILABLE else tk.Tk()
         self.root.title(TITLE)
         self.root.geometry(WINDOW_SIZE)
         self.root.configure(bg=COLOR["paper"])
         self.auto_open = tk.BooleanVar(value=True)
+        self.var_update_check = tk.BooleanVar(value=self.prefs.update_check)
         self.last_report = ""
+        self._closing = False
+        self._update_info: update_check.UpdateInfo | None = None
         self._build()
         if DND_AVAILABLE:
             self._enable_drop()
+        if check_updates:
+            update_check.check_async(self.root, update_check.SLUG, APP_VERSION, self.prefs,
+                                     self._on_update_result, fetcher=fetcher or update_check.fetch)
 
     # ---------- 화면 구성 ----------
     def _build(self) -> None:
@@ -62,6 +76,17 @@ class DropWindow:
         self.log.tag_config("pass", foreground=COLOR["green"])
         self.log.tag_config("fail", foreground=COLOR["red"])
         self.log.tag_config("muted", foreground=COLOR["muted"])
+        self._build_update_notice()
+
+    def _build_update_notice(self) -> None:
+        """창 아래 한 줄 알림(모달 아님). 처음에는 숨겨 두고, 새 버전이 있을 때만 기록 칸 아래에 끼운다."""
+        self.frm_update = tk.Frame(self.root, bg=COLOR["zone"], bd=1, relief="solid")
+        self.lbl_update = tk.Label(self.frm_update, text="", font=FONT_BODY, fg=COLOR["brown"], bg=COLOR["zone"])
+        self.lbl_update.pack(side="left", padx=(10, 6), pady=6)
+        tk.Button(self.frm_update, text="다음에", command=self._update_later, font=FONT_BODY,
+                  relief="flat", padx=10).pack(side="right", padx=(4, 8), pady=4)
+        tk.Button(self.frm_update, text="업데이트", command=self._update_open, font=FONT_BODY,
+                  bg=COLOR["brown"], fg="white", relief="flat", padx=10).pack(side="right", pady=4)
 
     def _build_buttons(self) -> None:
         bar = tk.Frame(self.root, bg=COLOR["paper"])
@@ -71,8 +96,13 @@ class DropWindow:
         self.open_button = tk.Button(bar, text="보고서 열기", command=self.open_last_report, font=FONT_BODY,
                                      state="disabled", relief="flat", padx=12)
         self.open_button.pack(side="left", padx=8)
-        tk.Checkbutton(bar, text="검사 후 보고서 자동 열기", variable=self.auto_open, font=FONT_BODY,
-                       bg=COLOR["paper"], activebackground=COLOR["paper"]).pack(side="right")
+        # 선택 항목은 버튼 아래 줄에 — 한 줄에 몰면 기본 창 너비(640)에서 글자가 잘린다
+        opts = tk.Frame(self.root, bg=COLOR["paper"])
+        opts.pack(fill="x", padx=16, pady=(0, 6))
+        tk.Checkbutton(opts, text="검사 후 보고서 자동 열기", variable=self.auto_open, font=FONT_BODY,
+                       bg=COLOR["paper"], activebackground=COLOR["paper"]).pack(side="left")
+        tk.Checkbutton(opts, text="새 버전 확인", variable=self.var_update_check, command=self._on_update_toggle,
+                       font=FONT_BODY, bg=COLOR["paper"], activebackground=COLOR["paper"]).pack(side="left", padx=(12, 0))
 
     @staticmethod
     def _zone_text() -> str:
@@ -126,10 +156,61 @@ class DropWindow:
         self.log.see("end")
         self.log.config(state="disabled")
 
+    # ---------- 새 버전 알림 ----------
+    def _save_prefs(self) -> None:
+        self.prefs.update_check = bool(self.var_update_check.get())
+        prefs_mod.save(self.prefs, self.prefs_path)
+
+    def _on_update_result(self, info: update_check.UpdateInfo | None, answered: bool) -> None:
+        """Tk 스레드. 서버가 답했을 때만 날짜를 기록 — 오프라인이었으면 다음 실행 때 다시 묻는다."""
+        if self._closing:
+            return
+        if answered:
+            self.prefs.update_check_last = update_check.today()
+            self._save_prefs()
+        if info is not None and self.var_update_check.get():
+            self._update_info = info
+            self._show_update_notice()
+
+    def _show_update_notice(self) -> None:
+        info = self._update_info
+        if info is None:
+            return
+        self.lbl_update.configure(text=f"새 버전 {info.latest}이 있습니다 (현재 {info.current})")
+        if not self.frm_update.winfo_manager():
+            # 기록 칸보다 먼저 자리를 잡아야 보인다(기록 칸이 남은 공간을 다 차지하므로)
+            self.frm_update.pack(fill="x", padx=20, pady=(0, 12), side="bottom", before=self.log)
+
+    def _hide_update_notice(self) -> None:
+        self._update_info = None
+        self.frm_update.pack_forget()
+
+    def _update_open(self) -> None:
+        """다운로드가 아니라 책갈피 툴 페이지를 연다 — 내려받기는 그 페이지가 맡는다."""
+        info = self._update_info
+        if info is not None and info.url.startswith(update_check.SITE):
+            try:
+                webbrowser.open(info.url)
+            except Exception:
+                pass
+        self._hide_update_notice()
+
+    def _update_later(self) -> None:
+        if self._update_info is not None:
+            self.prefs.update_check_skipped = self._update_info.latest   # 더 새 판이 나오면 다시 알린다
+            self._save_prefs()
+        self._hide_update_notice()
+
+    def _on_update_toggle(self) -> None:
+        self._save_prefs()
+        if not self.var_update_check.get():
+            self._hide_update_notice()
+
     def mainloop(self) -> None:
         self.root.mainloop()
 
     def destroy(self) -> None:
+        self._closing = True
         self.root.destroy()
 
 
@@ -152,7 +233,8 @@ def run_window(check_fn: CheckFn) -> None:
 
 
 def selftest() -> str:
-    """창을 만들었다 바로 닫고 드롭 기능 가용 여부를 돌려준다 (배포본 점검용)."""
-    window = DropWindow(lambda _p: ("", "", True))
+    """창을 만들었다 바로 닫고 드롭 기능 가용 여부를 돌려준다 (배포본 점검용).
+    새 버전 확인은 하지 않는다 — 점검이 서버에 묻거나 설정 파일을 쓰면 안 된다."""
+    window = DropWindow(lambda _p: ("", "", True), check_updates=False)
     window.destroy()
     return "dnd:available" if DND_AVAILABLE else "dnd:unavailable"

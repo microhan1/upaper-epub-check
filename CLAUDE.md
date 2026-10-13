@@ -6,10 +6,11 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 **유페이퍼 EPUB 검수기** — 유페이퍼(upaper.net) 업로드 전에 EPUB 이 유페이퍼 검수 기준에 맞는지 검사하는 Python CLI(+EXE). 기준의 단일 출처는 `upaper_check/default_rules.json` 과 각 `checks/*.py` 의 규칙 설명 문자열이며, 근거 문서는 유페이퍼 검수 기준 PDF(2015.01.12)와 도움말 페이지다. README 의 표가 사람용 요약.
 
-- 스택: Python 3.10+ · lxml · Pillow · (빌드) PyInstaller. 외부 서비스 없음, 네트워크 없음.
+- 스택: Python 3.10+ · lxml · Pillow · (빌드) PyInstaller. EPUB 검사는 네트워크를 쓰지 않는다. **예외는 끌어다 놓기 창의 「새 버전 확인」 하나뿐**(v0.2.6, `update_check.py`) — 하루 한 번 `GET https://chaekgalpi.co.kr/api/tools/upaperepub/latest?v=버전&os=win` 에 도구 이름·버전·OS 만 보낸다. 명령줄·EXE 아이콘 위 끌어놓기 경로에는 넣지 않는다. 자동 다운로드·모달·식별자 전송 금지. 동작 규칙은 책갈피 툴 공통(참고 구현 `D:\my\music-tag-filler\update_check.py`)이라 바꾸지 않는다.
 - 실행: `python upaper_check.py 책.epub [--html] [--json] [--publisher NAME] [--rules JSON] [--epubcheck JAR]`. 인자 없으면 끌어다 놓기 창(`gui.py`, tkinterdnd2). `UPAPER_SELFTEST=1` 로 실행하면 창을 만들었다 닫고 `dnd:available` 여부만 출력한다 — EXE 빌드 후 반드시 이걸로 드롭 모듈이 실렸는지 확인. EXE 는 창 모드(console=False)라 stdout 이 없으므로 `UPAPER_SELFTEST=결과.txt` 처럼 파일 경로를 주면 거기에 쓴다.
 - 창 모드 EXE 에서 `print` 는 조용히 버려진다. 사용자에게 보여야 하는 것은 `cli._windowed()` 분기에서 보고서 열기·메시지 상자로 처리한다.
-- 테스트: `python -m unittest discover -s tests -v` (120개). `tests/builders.py` 의 `Book()` 은 기본값이 규정을 지키는 EPUB 이고, **시험할 항목만 바꿔** 조립한다(`Book(publisher="홍길동")`, `Book(cover_image=None)` = 표지 없음, `Book(mimetype_stored=False)` 등). `tests/helpers.py` 의 `BookTest` 를 상속해 `self.check(book, **규칙덮어쓰기)` 로 findings 를 받고 `assertCode`/`assertNoCode`/`assertClean` 로 단언한다. **규칙을 추가·변경하면 그 규칙만 어긋난 책으로 시험을 하나 더 만든다** — 위반을 한 파일에 몰아넣으면 다른 규칙이 망가져도 드러나지 않는다.
+- 창 설정은 프로그램 옆 `settings.json`(`prefs.py`, 책갈피 툴 공통 방식). 시험·캡처에서는 `DropWindow(prefs_path=임시경로, check_updates=False 또는 fetcher=가짜)` 로 사용자 설정과 실제 서버를 건드리지 않는다. `selftest()` 는 새 버전을 묻지도 설정을 쓰지도 않는다.
+- 테스트: `python -m unittest discover -s tests -v` (146개). `tests/builders.py` 의 `Book()` 은 기본값이 규정을 지키는 EPUB 이고, **시험할 항목만 바꿔** 조립한다(`Book(publisher="홍길동")`, `Book(cover_image=None)` = 표지 없음, `Book(mimetype_stored=False)` 등). `tests/helpers.py` 의 `BookTest` 를 상속해 `self.check(book, **규칙덮어쓰기)` 로 findings 를 받고 `assertCode`/`assertNoCode`/`assertClean` 로 단언한다. **규칙을 추가·변경하면 그 규칙만 어긋난 책으로 시험을 하나 더 만든다** — 위반을 한 파일에 몰아넣으면 다른 규칙이 망가져도 드러나지 않는다.
 - 실전 기준 파일: 유페이퍼 승인(2026-09-05)된 `D:\my\PDF To Epub\dist\스캔북 컨버터\doc\하늘은 왜 파래요 - microhan.epub` 은 **오류 0 으로 통과해야 한다**(회귀 기준). 규칙을 바꾸면 이 파일로도 돌려 본다.
 
 ## Non-Obvious Rules
