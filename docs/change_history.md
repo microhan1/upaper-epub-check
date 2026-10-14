@@ -5,6 +5,23 @@
 
 ---
 
+## v0.2.7 (2026-10-14) — 새 버전 확인 중 창을 닫으면 프로그램이 죽던 결함 수정
+
+### 배경
+- 같은 구조의 책갈피 툴(scan-pdf-split)에서 발견돼 메인 통합 프로젝트가 알려 줬고, 이 도구에서도 재현됐다: 서버 응답을 기다리는 동안(창을 연 뒤 1.5초~최대 5.5초) 창을 닫으면 `Tcl_AsyncDelete: async handler deleted by the wrong thread` 로 프로세스가 종료(코드 3).
+
+### 수정
+- `update_check.check_async` — 작업 스레드는 서버 답을 dict 에만 담고 Tk 객체·콜백을 쥐지 않는다. Tk 스레드가 `root.after(100ms)` 로 답을 가져가 `on_result` 를 부른다(scan-pdf-split v0.1.3 과 같은 방식).
+- `DropWindow.destroy` — 남은 after 예약을 지우고 닫는다. 창의 X 버튼도 같은 경로를 탄다.
+
+### 변경
+- 알림 문구: 「새 버전 {latest}이 있습니다 (현재 {current})」 → 「새 버전이 나왔습니다: {latest} (현재 {current})」 (책갈피 툴 공통). README·`docs/update_notice.png` 갱신.
+
+### 추가
+- 회귀 시험 2개: 작업 스레드가 root·on_result 를 쥐지 않는지, 요청 중에 창을 닫아도 3회 연속 살아남는지(별도 프로세스). 고치기 전 코드에서는 둘 다 실패함을 확인. 총 148개.
+
+---
+
 ## v0.2.6 (2026-10-13) — 「새 버전 확인」 (tool-update-check)
 
 ### 배경

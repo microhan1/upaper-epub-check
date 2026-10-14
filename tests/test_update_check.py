@@ -189,6 +189,63 @@ class WhenNoticeShowsTest(InlineThreadTest):
                 self.assertIsNone(uc.interpret(dict(OK, latest=latest), "0.2.6"))
 
 
+# ------------------------------------------------------------------ 창을 닫아도 죽지 않기 (v0.2.7)
+class ThreadSafetyTest(unittest.TestCase):
+    def test_the_thread_holds_no_tk_object(self):
+        """작업 스레드가 창을 붙잡으면 안 된다 — 마지막 참조를 쥐고 끝나면 Tk 객체가 메인 스레드 밖에서
+        풀리고 Tcl 이 프로세스를 죽인다."""
+        captured = {}
+
+        class CaptureThread:
+            def __init__(self, target, name=None, daemon=None):
+                captured["target"] = target
+
+            def start(self):
+                pass
+
+        class Root:
+            def after(self, ms, fn):
+                if ms == uc.DELAY_MS:
+                    fn()
+
+        root, on_result = Root(), lambda info, answered: None
+        with mock.patch.object(uc.threading, "Thread", CaptureThread):
+            uc.check_async(root, SLUG, "0.2.7", prefs_mod.Prefs(), on_result, fetcher=lambda s, v: OK, day=DAY)
+        target = captured["target"]
+        held = [c.cell_contents for c in (target.__closure__ or ())] + list(target.__defaults__ or ())
+        self.assertFalse(any(x is root or x is on_result for x in held))
+
+    def test_closing_while_the_request_is_out_does_not_abort_tcl(self):
+        """고치기 전에는 'Tcl_AsyncDelete: async handler deleted by the wrong thread' 로 죽었다(v0.2.6)."""
+        import subprocess
+        with tempfile.TemporaryDirectory() as tmp:
+            script = os.path.join(tmp, "close_while_asking.py")
+            with open(script, "w", encoding="utf-8") as fh:
+                fh.write(CLOSE_WHILE_ASKING.format(root=ROOT, prefs=os.path.join(tmp, "settings.json")))
+            p = subprocess.run([sys.executable, "-W", "ignore", script], capture_output=True, timeout=120)
+        out = (p.stdout + p.stderr).decode("utf-8", "replace")
+        self.assertEqual(p.returncode, 0, out[-800:])
+        self.assertIn("survived", out)
+        self.assertNotIn("Tcl_AsyncDelete", out)
+
+
+CLOSE_WHILE_ASKING = r"""
+import sys, time
+sys.path.insert(0, {root!r})
+from upaper_check import gui
+def slow(slug, version):
+    time.sleep(1.5)          # 창이 닫힐 때 요청이 아직 나가 있다
+    return {{"latest": "9.9.9", "updateAvailable": True, "url": "https://chaekgalpi.co.kr/tools/upaperepub"}}
+for _ in range(3):
+    win = gui.DropWindow(lambda _p: ("", "", True), prefs_path={prefs!r}, fetcher=slow)
+    win.root.after(1700, win.destroy)      # 요청을 보낸 지 0.2초 뒤
+    win.root.mainloop()
+    del win
+    time.sleep(2.0)          # 창이 없는 채로 스레드가 끝난다
+print("survived")
+"""
+
+
 # ------------------------------------------------------------------ 설정 파일
 class SettingsTest(unittest.TestCase):
     def setUp(self):
@@ -251,7 +308,7 @@ class WindowNoticeTest(unittest.TestCase):
         self.win.root.update_idletasks()
         self.assertEqual(self.saved()["update_check_last"], uc.today())
         self.assertTrue(self.win.frm_update.winfo_manager())
-        self.assertEqual(self.win.lbl_update.cget("text"), "새 버전 0.3.0이 있습니다 (현재 0.2.6)")
+        self.assertEqual(self.win.lbl_update.cget("text"), "새 버전이 나왔습니다: 0.3.0 (현재 0.2.6)")
 
     def test_no_answer_records_nothing_and_shows_nothing(self):
         self.win._on_update_result(None, False)

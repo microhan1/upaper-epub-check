@@ -21,6 +21,7 @@ SITE = "https://chaekgalpi.co.kr/"  # 알림은 이 사이트의 페이지만 �
 SLUG = "upaperepub"
 TIMEOUT = 4.0
 DELAY_MS = 1500
+POLL_MS = 100                        # Tk 스레드가 서버 답이 왔는지 보는 간격
 MAX_BYTES = 64 * 1024
 MAX_VERSION_LEN = 32
 
@@ -81,17 +82,28 @@ def check_async(root, slug: str, version: str, prefs, on_result: Callable[[Updat
     if not should_check(prefs, day or today()):
         return False
     skipped = getattr(prefs, "update_check_skipped", "")
+    box: dict = {}
 
-    def work() -> None:
-        data = fetcher(slug, version)
-        info = interpret(data, version, skipped)
-        try:
-            root.after(0, lambda: on_result(info, data is not None))
-        except Exception:  # 그사이 창이 닫혔다
-            pass
+    # 작업 스레드는 서버 답을 box 에 담기만 하고 Tk 객체를 하나도 쥐지 않는다. 예전에는
+    # root.after(0, on_result) 로 넘겼는데, 요청 중에 창을 닫으면 그 스레드가 창의 마지막 참조를
+    # 쥔 채 끝나면서 Tk 변수를 메인 스레드 밖에서 풀었고 Tcl 이 프로세스를 죽였다
+    # ("Tcl_AsyncDelete: async handler deleted by the wrong thread", v0.2.6). 이제 Tk 스레드가 가져간다.
+    def work(box=box) -> None:
+        box["data"] = fetcher(slug, version)
+
+    def poll() -> None:
+        if "data" not in box:
+            try:
+                root.after(POLL_MS, poll)
+            except Exception:  # 그사이 창이 닫혔다
+                pass
+            return
+        data = box["data"]
+        on_result(interpret(data, version, skipped), data is not None)
 
     def start() -> None:
         threading.Thread(target=work, name="update-check", daemon=True).start()
+        poll()
 
     try:
         root.after(DELAY_MS, start)

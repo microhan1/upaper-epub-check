@@ -52,6 +52,7 @@ class DropWindow:
         self.last_report = ""
         self._closing = False
         self._update_info: update_check.UpdateInfo | None = None
+        self.root.protocol("WM_DELETE_WINDOW", self.destroy)   # X 버튼도 같은 정리 경로로
         self._build()
         if DND_AVAILABLE:
             self._enable_drop()
@@ -176,7 +177,7 @@ class DropWindow:
         info = self._update_info
         if info is None:
             return
-        self.lbl_update.configure(text=f"새 버전 {info.latest}이 있습니다 (현재 {info.current})")
+        self.lbl_update.configure(text=f"새 버전이 나왔습니다: {info.latest} (현재 {info.current})")
         if not self.frm_update.winfo_manager():
             # 기록 칸보다 먼저 자리를 잡아야 보인다(기록 칸이 남은 공간을 다 차지하므로)
             self.frm_update.pack(fill="x", padx=20, pady=(0, 12), side="bottom", before=self.log)
@@ -210,7 +211,16 @@ class DropWindow:
         self.root.mainloop()
 
     def destroy(self) -> None:
+        """남은 after 예약(새 버전 확인의 0.1초 확인 등)을 지우고 닫는다 — 닫힌 창의 예약이 남아
+        있으면 Tk 가 '없는 명령'이라고 오류를 낸다."""
+        if self._closing:
+            return
         self._closing = True
+        try:
+            for pending in self.root.tk.splitlist(self.root.tk.call("after", "info")):
+                self.root.after_cancel(pending)
+        except tk.TclError:
+            pass
         self.root.destroy()
 
 
