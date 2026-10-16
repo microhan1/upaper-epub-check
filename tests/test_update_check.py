@@ -17,7 +17,9 @@ from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.join(ROOT, "tests"))
 
+import net_guard  # noqa: E402,F401  — 시험이 운영 서버를 치지 못하게
 from upaper_check import prefs as prefs_mod  # noqa: E402
 from upaper_check import update_check as uc  # noqa: E402
 
@@ -221,7 +223,7 @@ class ThreadSafetyTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             script = os.path.join(tmp, "close_while_asking.py")
             with open(script, "w", encoding="utf-8") as fh:
-                fh.write(CLOSE_WHILE_ASKING.format(root=ROOT, prefs=os.path.join(tmp, "settings.json")))
+                fh.write(CLOSE_WHILE_ASKING.format(root=ROOT, tests=os.path.join(ROOT, "tests"), prefs=os.path.join(tmp, "settings.json")))
             p = subprocess.run([sys.executable, "-W", "ignore", script], capture_output=True, timeout=120)
         out = (p.stdout + p.stderr).decode("utf-8", "replace")
         self.assertEqual(p.returncode, 0, out[-800:])
@@ -232,6 +234,8 @@ class ThreadSafetyTest(unittest.TestCase):
 CLOSE_WHILE_ASKING = r"""
 import sys, time
 sys.path.insert(0, {root!r})
+sys.path.insert(0, {tests!r})
+import net_guard          # 이 자식 프로세스도 운영 서버를 치지 못하게
 from upaper_check import gui
 def slow(slug, version):
     time.sleep(1.5)          # 창이 닫힐 때 요청이 아직 나가 있다

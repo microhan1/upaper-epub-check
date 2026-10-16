@@ -10,6 +10,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "tests"))
 
+import net_guard  # noqa: E402,F401  — 시험이 운영 서버를 치지 못하게
 from builders import Book  # noqa: E402
 from upaper_check.checks import run_all  # noqa: E402
 from upaper_check.context import Context, load_rules  # noqa: E402
