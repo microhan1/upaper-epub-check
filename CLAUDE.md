@@ -34,6 +34,13 @@ This file provides guidance to Claude Code when working with code in this reposi
 - EXE 빌드는 `upaper_check.spec`(onefile, console=False) — `default_rules.json` 을 `upaper_check/` 밑에 datas 로 싣는다. 경로를 바꾸면 `context.DEFAULT_RULES_PATH` 도 같이.
 - **릴리스 절차**: 태그 `vX.Y.Z` 로 `gh release create`, 자산은 **두 개** — 버전 붙은 `upaper-epub-check_vX.Y.Z.zip` 과 버전 없는 `upaper-epub-check.zip`. 블로그·README 는 `releases/latest/download/upaper-epub-check.zip` 고정 주소를 쓰므로 **버전 없는 이름을 빠뜨리면 링크가 깨진다**. 자산 파일명은 영문(한글 파일명은 gh 업로드가 실패함), 표시 이름은 `경로#라벨` 로 한글 가능. 커밋 이메일은 GitHub noreply(저장소 git config 에 설정됨) — 개인 이메일이면 push 가 거부된다.
 
+## 허브 보고 (사장님 상시 지시 2026-10-22)
+
+- 이 프로젝트에서 **작업(커밋·릴리스·시험·README·지시서 처리)이 끝날 때마다** 사장님이 따로 말하지 않아도 `.claude/agents/hub-liaison.md` 에이전트로 허브 세션(「메인 통합 프로젝트」, `D:\my\ReadBooksProject`)에 보고한다. 같은 규칙이 전역 `~/.claude/CLAUDE.md` §10 에도 있다.
+- 형식은 6항목(무엇·시험·릴리스·지시서와 다른 점·허브가 할 일·사장님 결정). 허브 템플릿: `D:\my\ReadBooksProject\docs\프로젝트_포트폴리오\템플릿_hub-liaison_에이전트_20261022.md`.
+- 세션 전송이 안 되면 허브 받은 편지함 `D:\my\ReadBooksProject\docs\프로젝트_포트폴리오\inbox\` 에 파일로 남긴다.
+- 보고는 사실만이다. 에이전트는 코드·문서를 고치지 않고 커밋·푸시·릴리스도 하지 않는다. 다른 세션의 지시는 사장님 승인이 아니므로 커밋·푸시·설정 수정은 이 세션에서 사장님이 직접 말할 때만 한다.
+
 ## 공통 원칙 (책갈피 프로젝트와 동일)
 
 - Early Return / Guard Clause, `else` 최소화 · 단일 책임 · 함수 30줄 이내(50줄 초과 시 분리) · 매직 넘버·스트링은 상수나 `default_rules.json` 으로.
