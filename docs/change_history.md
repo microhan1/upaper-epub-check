@@ -5,6 +5,27 @@
 
 ---
 
+## v0.2.8 (2026-10-26) — 창에 「의견 보내기」 추가
+
+### 배경
+- 책갈피 서버 v1.133 이 툴 페이지 아래에 로그인 없는 의견 칸(`https://chaekgalpi.co.kr/tools/upaperepub#feedback`)을 열었다(메인 통합 프로젝트 지시, 책갈피 툴 공통). 프로그램은 그 주소를 브라우저로 열기만 하고, 입력창·전송 기능은 없으며 서버에 요청하지 않는다.
+
+### 추가
+- `update_check.feedback_url(slug, version, lang)` — 순수 함수. `…/tools/upaperepub?utm_source=app&utm_medium=feedback&v={버전}#feedback`. en·ja·zh-CN 은 `/en/tools/…`(일본어·중국어 페이지 없음), 그 밖(알 수 없는 언어·None)은 한국어 페이지. 버전은 `urllib.parse.quote(safe="")` 로 인코딩, 비면 `v` 를 뺀다. 주소는 코드 상수로만 조립.
+- 끌어다 놓기 창: 「새 버전 확인」 체크박스 줄 오른쪽에 밑줄 링크 버튼 「의견 보내기」(이 도구는 메뉴 막대가 없다). 누르면 `webbrowser.open` 한 번. 브라우저를 못 열면(False·`webbrowser.Error`·OSError 등) 창은 그대로 두고 기록 칸에 안내와 주소를 한 줄로 적어 복사할 수 있게 한다.
+- 문구 4개 언어(`gui.FEEDBACK_TEXT`: 버튼 이름·실패 안내). 창이 한국어 전용이라 지금은 한국어만 보인다.
+- `tests/test_feedback.py` 26개: 주소(언어별 정확한 문자열·대소문자·알 수 없는 언어), 버전(빈 값·`+`·`&`·`#`·한글·줄바꿈을 다시 읽어 원래 값인지), 버튼 콜백·언어 바꾼 뒤 주소, 실패 5종에서 창 상태 불변, 문구 키, 새 버전 알림과 공존, `--help`/`--version` 불변, 네트워크(urlopen·소켓) 0건. 총 178개.
+
+### 변경
+- README 「의견·문의」 절 추가(GitHub Issues 도 그대로 받음). `docs/feedback_button.png` — 버튼이 보이는 창 캡처.
+
+### 검증
+- unittest 178개 통과. 승인본 『하늘은 왜 파래요?』(사본)을 실제 epubcheck 5.4.0 과 함께 돌려 오류 0.
+- EXE: 죽은 프록시(`HTTP(S)_PROXY=http://127.0.0.1:9`)에서 자체 점검 `dnd:available`, 창을 띄워 5초 뒤 닫기 → 종료 코드 0, settings.json 생기지 않음. 버튼은 누르지 않았다(실제 브라우저를 열지 않음).
+- pytest 로 돌리면 창 시험이 가끔 Tk 초기화 실패(`tk.tcl` 을 못 찾음)로 건너뛰어진다 — 기존 `test_update_check` 창 시험에서도 같은 현상이라 이번 변경과 무관. 새 창 시험은 클래스당 창 하나로 노출을 줄였다.
+
+---
+
 ## 시험 (2026-10-15) — 시험이 운영 서버(chaekgalpi.co.kr)를 치지 않게 차단
 
 ### 추가

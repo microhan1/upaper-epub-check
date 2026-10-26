@@ -25,6 +25,14 @@ POLL_MS = 100                        # Tk 스레드가 서버 답이 왔는지 �
 MAX_BYTES = 64 * 1024
 MAX_VERSION_LEN = 32
 
+# 「의견 보내기」: 툴 페이지의 의견 칸(#feedback)을 브라우저로 열기만 한다 — 프로그램은 서버에 요청하지 않는다.
+# 주소는 이 상수로만 조립한다(설정·서버 응답에서 받지 않는다). utm_source=app 이라야 관리자 화면에 프로그램으로 찍힌다.
+FEEDBACK_PAGE_KO = SITE + "tools/{slug}"
+FEEDBACK_PAGE_EN = SITE + "en/tools/{slug}"      # 일본어·중국어 페이지는 없어 영어 페이지로
+FEEDBACK_EN_LANGS = ("en", "ja", "zh-cn")
+FEEDBACK_QUERY = "utm_source=app&utm_medium=feedback"
+FEEDBACK_ANCHOR = "#feedback"
+
 
 @dataclasses.dataclass
 class UpdateInfo:
@@ -56,6 +64,17 @@ def fetch(slug: str, version: str, *, opener: Callable = urllib.request.urlopen)
     except Exception:  # 오프라인·시간 초과·HTTP 오류·이상한 JSON: 아무 말도 하지 않는다
         return None
     return data if isinstance(data, dict) else None
+
+
+def feedback_url(slug: str, version: str | None, lang: str | None) -> str:
+    """의견 칸 주소. en·ja·zh-CN 은 영어 페이지, 그 밖(알 수 없는 언어·None)은 한국어 페이지.
+    버전은 그대로 인코딩해 붙이고(앞의 v 도 그대로), 비어 있으면 v 를 뺀다."""
+    norm = (lang or "").strip().lower().replace("_", "-")
+    page = FEEDBACK_PAGE_EN if norm in FEEDBACK_EN_LANGS else FEEDBACK_PAGE_KO
+    query = FEEDBACK_QUERY
+    if version is not None and str(version).strip():
+        query += "&v=" + urllib.parse.quote(str(version), safe="")
+    return f"{page.format(slug=slug)}?{query}{FEEDBACK_ANCHOR}"
 
 
 def interpret(data: dict | None, version: str, skipped: str = "") -> UpdateInfo | None:

@@ -31,6 +31,19 @@ COLOR = {"paper": "#FAF6EF", "ink": "#2C2822", "brown": "#6B4F3B", "gold": "#C9A
 FONT_BODY = ("Malgun Gothic", 10)
 FONT_ZONE = ("Malgun Gothic", 13, "bold")
 FONT_TITLE = ("Malgun Gothic", 14, "bold")
+FONT_LINK = ("Malgun Gothic", 10, "underline")
+
+UI_LANG = "ko"   # 창은 한국어 전용 — 「의견 보내기」 문구만 책갈피 툴 공통 4개 언어를 갖춰 둔다
+FEEDBACK_TEXT = {
+    "ko": {"label": "의견 보내기",
+           "failed": "브라우저를 열지 못했습니다. 아래 주소를 복사해 브라우저 주소창에 붙여 넣어 주세요:"},
+    "en": {"label": "Send feedback",
+           "failed": "Couldn't open your browser. Copy this address into your browser's address bar:"},
+    "ja": {"label": "ご意見を送る",
+           "failed": "ブラウザを開けませんでした。次のアドレスをコピーしてブラウザのアドレス欄に貼り付けてください："},
+    "zh-CN": {"label": "发送反馈",
+              "failed": "无法打开浏览器。请复制以下地址并粘贴到浏览器地址栏："},
+}
 
 # check_fn(epub_path) -> (요약 한 줄, 보고서 경로, 오류 없음 여부)
 CheckFn = Callable[[str], tuple[str, str, bool]]
@@ -50,6 +63,7 @@ class DropWindow:
         self.auto_open = tk.BooleanVar(value=True)
         self.var_update_check = tk.BooleanVar(value=self.prefs.update_check)
         self.last_report = ""
+        self.lang = UI_LANG
         self._closing = False
         self._update_info: update_check.UpdateInfo | None = None
         self.root.protocol("WM_DELETE_WINDOW", self.destroy)   # X 버튼도 같은 정리 경로로
@@ -104,6 +118,10 @@ class DropWindow:
                        bg=COLOR["paper"], activebackground=COLOR["paper"]).pack(side="left")
         tk.Checkbutton(opts, text="새 버전 확인", variable=self.var_update_check, command=self._on_update_toggle,
                        font=FONT_BODY, bg=COLOR["paper"], activebackground=COLOR["paper"]).pack(side="left", padx=(12, 0))
+        self.feedback_button = tk.Button(opts, text=self._text("label"), command=self.send_feedback, font=FONT_LINK,
+                                         fg=COLOR["brown"], bg=COLOR["paper"], activebackground=COLOR["paper"],
+                                         activeforeground=COLOR["brown"], relief="flat", bd=0, cursor="hand2")
+        self.feedback_button.pack(side="right", padx=(0, 4))
 
     @staticmethod
     def _zone_text() -> str:
@@ -150,6 +168,20 @@ class DropWindow:
 
     def open_last_report(self) -> None:
         open_report(self.last_report)
+
+    def _text(self, key: str) -> str:
+        return FEEDBACK_TEXT.get(self.lang, FEEDBACK_TEXT[UI_LANG])[key]
+
+    def send_feedback(self) -> None:
+        """책갈피 툴 페이지의 의견 칸을 브라우저로 연다 — 프로그램은 서버에 아무것도 보내지 않는다.
+        브라우저를 못 열면 주소를 기록 칸에 적어 복사할 수 있게 한다."""
+        url = update_check.feedback_url(update_check.SLUG, APP_VERSION, self.lang)
+        try:
+            opened = webbrowser.open(url)
+        except Exception:  # webbrowser.Error·OSError 등 — 창은 그대로 둔다
+            opened = False
+        if not opened:
+            self._append(f"{self._text('failed')}\n{url}\n\n", "muted")
 
     def _append(self, text: str, tag: str) -> None:
         self.log.config(state="normal")
