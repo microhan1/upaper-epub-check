@@ -29,9 +29,10 @@ MAX_VERSION_LEN = 32
 # 주소는 이 상수로만 조립한다(설정·서버 응답에서 받지 않는다). utm_source=app 이라야 관리자 화면에 프로그램으로 찍힌다.
 FEEDBACK_PAGE_KO = SITE + "tools/{slug}"
 FEEDBACK_PAGE_EN = SITE + "en/tools/{slug}"      # 일본어·중국어 페이지는 없어 영어 페이지로
-FEEDBACK_EN_LANGS = ("en", "ja", "zh-cn")
 FEEDBACK_QUERY = "utm_source=app&utm_medium=feedback"
 FEEDBACK_ANCHOR = "#feedback"
+DEFAULT_LANG = "ko"                               # 언어를 모를 때 = 이 툴의 화면 언어(한국어 전용)
+KOREAN_PREFIX = "ko"
 
 
 @dataclasses.dataclass
@@ -39,6 +40,7 @@ class UpdateInfo:
     latest: str
     current: str
     url: str
+    url_en: str | None = None                     # 서버가 영어 페이지를 따로 줄 때(urlEn)
 
 
 def today() -> str:
@@ -66,11 +68,24 @@ def fetch(slug: str, version: str, *, opener: Callable = urllib.request.urlopen)
     return data if isinstance(data, dict) else None
 
 
+def is_korean(lang: str | None) -> bool:
+    """화면 언어가 받을 페이지 — 책갈피 툴 공통 규칙. 첫 부분이 ko(ko·ko-KR)면 한국어 페이지,
+    그 밖의 모든 코드(en·ja·zh-CN·zh-TW·fr·모르는 코드)는 영어 페이지. None·빈 값은 이 툴의 기본(한국어)."""
+    code = (lang or "").strip() or DEFAULT_LANG
+    return code.lower().startswith(KOREAN_PREFIX)
+
+
+def page_for(info: UpdateInfo, lang: str | None) -> str:
+    """[업데이트] 가 열 페이지: 한국어 화면은 url, 그 밖은 서버가 사이트 안의 영어 페이지를 줬을 때 그 페이지."""
+    if not is_korean(lang) and info.url_en and info.url_en.startswith(SITE):
+        return info.url_en
+    return info.url
+
+
 def feedback_url(slug: str, version: str | None, lang: str | None) -> str:
-    """의견 칸 주소. en·ja·zh-CN 은 영어 페이지, 그 밖(알 수 없는 언어·None)은 한국어 페이지.
+    """의견 칸 주소. 페이지는 is_korean() 규칙으로 고른다.
     버전은 그대로 인코딩해 붙이고(앞의 v 도 그대로), 비어 있으면 v 를 뺀다."""
-    norm = (lang or "").strip().lower().replace("_", "-")
-    page = FEEDBACK_PAGE_EN if norm in FEEDBACK_EN_LANGS else FEEDBACK_PAGE_KO
+    page = FEEDBACK_PAGE_KO if is_korean(lang) else FEEDBACK_PAGE_EN
     query = FEEDBACK_QUERY
     if version is not None and str(version).strip():
         query += "&v=" + urllib.parse.quote(str(version), safe="")
@@ -90,7 +105,9 @@ def interpret(data: dict | None, version: str, skipped: str = "") -> UpdateInfo 
     latest = latest.strip()
     if latest == (skipped or "").strip():
         return None
-    return UpdateInfo(latest, version, url)
+    url_en = data.get("urlEn")
+    url_en = url_en if isinstance(url_en, str) and url_en.startswith(SITE) else None
+    return UpdateInfo(latest, version, url, url_en)
 
 
 def check_async(root, slug: str, version: str, prefs, on_result: Callable[[UpdateInfo | None, bool], None], *,

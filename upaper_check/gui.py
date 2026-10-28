@@ -33,20 +33,93 @@ FONT_ZONE = ("Malgun Gothic", 13, "bold")
 FONT_TITLE = ("Malgun Gothic", 14, "bold")
 FONT_LINK = ("Malgun Gothic", 10, "underline")
 
+TIP_BG = "#FFFFE1"
 UI_LANG = "ko"   # 창은 한국어 전용 — 「의견 보내기」 문구만 책갈피 툴 공통 4개 언어를 갖춰 둔다
 FEEDBACK_TEXT = {
     "ko": {"label": "의견 보내기",
+           "tip": "안 되는 것·불편한 것·바라는 기능을 알려 주세요(브라우저가 열립니다)",
            "failed": "브라우저를 열지 못했습니다. 아래 주소를 복사해 브라우저 주소창에 붙여 넣어 주세요:"},
     "en": {"label": "Send feedback",
+           "tip": "Tell us what's broken or missing (opens your browser)",
            "failed": "Couldn't open your browser. Copy this address into your browser's address bar:"},
     "ja": {"label": "ご意見を送る",
+           "tip": "不具合・ご要望をお知らせください（ブラウザが開きます）",
            "failed": "ブラウザを開けませんでした。次のアドレスをコピーしてブラウザのアドレス欄に貼り付けてください："},
     "zh-CN": {"label": "发送反馈",
+              "tip": "告诉我们问题或建议（将打开浏览器）",
               "failed": "无法打开浏览器。请复制以下地址并粘贴到浏览器地址栏："},
 }
+FEEDBACK_KEYS = ("<Return>", "<KP_Enter>", "<space>")   # 링크에 초점이 있을 때 누르면 여는 키
 
 # check_fn(epub_path) -> (요약 한 줄, 보고서 경로, 오류 없음 여부)
 CheckFn = Callable[[str], tuple[str, str, bool]]
+
+
+class Tooltip:
+    """마우스를 올린 위젯 아래 작은 설명(표준 tkinter 만). 문구는 보일 때마다 text_fn 으로 읽는다."""
+
+    DELAY_MS = 450
+    WRAP = 320
+    GAP = 4
+
+    def __init__(self, widget: tk.Misc, text_fn: Callable[[], str]) -> None:
+        self.widget, self.text_fn = widget, text_fn
+        self.tip: tk.Toplevel | None = None
+        self.label: tk.Label | None = None
+        self._job: str | None = None
+        widget.bind("<Enter>", lambda _e: self._schedule(), add="+")
+        for seq in ("<Leave>", "<ButtonPress>", "<Destroy>"):
+            widget.bind(seq, lambda _e: self.hide(), add="+")
+
+    def _schedule(self) -> None:
+        self._cancel()
+        self._job = self.widget.after(self.DELAY_MS, self.show)
+
+    def _cancel(self) -> None:
+        if self._job is None:
+            return
+        try:
+            self.widget.after_cancel(self._job)
+        except tk.TclError:
+            pass
+        self._job = None
+
+    def show(self) -> None:
+        self._job = None
+        if self.tip is None:
+            self.tip = tk.Toplevel(self.widget)
+            self.tip.wm_overrideredirect(True)
+            self.tip.wm_attributes("-topmost", True)
+            self.label = tk.Label(self.tip, justify="left", bg=TIP_BG, fg=COLOR["ink"], font=FONT_BODY,
+                                  relief="solid", bd=1, padx=6, pady=3, wraplength=self.WRAP)
+            self.label.pack()
+        self.label.configure(text=self.text_fn())
+        self.place()
+
+    def place(self) -> None:
+        """링크 오른쪽 끝 아래에 맞춘 뒤 창 안, 다시 화면 안으로 당긴다 — 창을 화면 끝에 붙여도 잘리지 않게."""
+        w, tip = self.widget, self.tip
+        tip.update_idletasks()
+        tw, th = tip.winfo_reqwidth(), tip.winfo_reqheight()
+        x = w.winfo_rootx() + w.winfo_width() - tw
+        y = w.winfo_rooty() + w.winfo_height() + self.GAP
+        top = w.winfo_toplevel()
+        left, right = top.winfo_rootx(), top.winfo_rootx() + top.winfo_width()
+        if tw <= right - left:
+            x = min(max(x, left), right - tw)
+        x = min(max(x, 0), w.winfo_screenwidth() - tw)
+        y = min(max(y, 0), w.winfo_screenheight() - th)
+        tip.wm_geometry(f"+{x}+{y}")
+
+    def hide(self) -> None:
+        self._cancel()
+        tip, self.tip, self.label = self.tip, None, None
+        if tip is None:
+            return
+        try:
+            tip.destroy()
+        except tk.TclError:
+            pass
 
 
 class DropWindow:
@@ -116,12 +189,30 @@ class DropWindow:
         opts.pack(fill="x", padx=16, pady=(0, 6))
         tk.Checkbutton(opts, text="검사 후 보고서 자동 열기", variable=self.auto_open, font=FONT_BODY,
                        bg=COLOR["paper"], activebackground=COLOR["paper"]).pack(side="left")
-        tk.Checkbutton(opts, text="새 버전 확인", variable=self.var_update_check, command=self._on_update_toggle,
-                       font=FONT_BODY, bg=COLOR["paper"], activebackground=COLOR["paper"]).pack(side="left", padx=(12, 0))
-        self.feedback_button = tk.Button(opts, text=self._text("label"), command=self.send_feedback, font=FONT_LINK,
-                                         fg=COLOR["brown"], bg=COLOR["paper"], activebackground=COLOR["paper"],
-                                         activeforeground=COLOR["brown"], relief="flat", bd=0, cursor="hand2")
-        self.feedback_button.pack(side="right", padx=(0, 4))
+        self.chk_update = tk.Checkbutton(opts, text="새 버전 확인", variable=self.var_update_check,
+                                         command=self._on_update_toggle, font=FONT_BODY, bg=COLOR["paper"],
+                                         activebackground=COLOR["paper"])
+        self.chk_update.pack(side="left", padx=(12, 0))
+        self._build_feedback_link(opts)
+
+    def _build_feedback_link(self, parent: tk.Misc) -> None:
+        """「새 버전 확인」 다음 Tab 자리. Enter·Space 로 열고, 초점이 있는 동안 갈색 테두리를 그린다
+        (테두리 칸은 늘 있고 색만 바뀌어 크기가 그대로다)."""
+        link = tk.Button(parent, text=self._text("label"), command=self.send_feedback, font=FONT_LINK,
+                         fg=COLOR["brown"], bg=COLOR["paper"], activebackground=COLOR["paper"],
+                         activeforeground=COLOR["brown"], relief="flat", bd=0, cursor="hand2", takefocus=True,
+                         highlightthickness=1, highlightbackground=COLOR["paper"], highlightcolor=COLOR["paper"])
+        link.pack(side="right", padx=(0, 4))
+        for seq in FEEDBACK_KEYS:   # break: Button 기본 Space 바인딩이 한 번 더 열지 않게
+            link.bind(seq, lambda _e: (self.send_feedback(), "break")[1])
+        link.bind("<FocusIn>", lambda _e: self._show_focus(True))
+        link.bind("<FocusOut>", lambda _e: self._show_focus(False))
+        self.feedback_button = link
+        self.feedback_tip = Tooltip(link, lambda: self._text("tip"))
+
+    def _show_focus(self, focused: bool) -> None:
+        color = COLOR["brown"] if focused else COLOR["paper"]
+        self.feedback_button.configure(highlightbackground=color, highlightcolor=color)
 
     @staticmethod
     def _zone_text() -> str:
@@ -175,6 +266,7 @@ class DropWindow:
     def send_feedback(self) -> None:
         """책갈피 툴 페이지의 의견 칸을 브라우저로 연다 — 프로그램은 서버에 아무것도 보내지 않는다.
         브라우저를 못 열면 주소를 기록 칸에 적어 복사할 수 있게 한다."""
+        self.feedback_tip.hide()   # 브라우저 위에 설명이 남지 않게
         url = update_check.feedback_url(update_check.SLUG, APP_VERSION, self.lang)
         try:
             opened = webbrowser.open(url)
@@ -221,9 +313,10 @@ class DropWindow:
     def _update_open(self) -> None:
         """다운로드가 아니라 책갈피 툴 페이지를 연다 — 내려받기는 그 페이지가 맡는다."""
         info = self._update_info
-        if info is not None and info.url.startswith(update_check.SITE):
+        page = update_check.page_for(info, self.lang) if info is not None else ""
+        if page.startswith(update_check.SITE):
             try:
-                webbrowser.open(info.url)
+                webbrowser.open(page)
             except Exception:
                 pass
         self._hide_update_notice()

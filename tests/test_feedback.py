@@ -40,10 +40,16 @@ class AddressTest(unittest.TestCase):
             with self.subTest(lang):
                 self.assertEqual(uc.feedback_url(SLUG, "0.2.8", lang), url)
 
-    def test_unknown_or_missing_language_gives_korean_page(self):
-        for lang in (None, "", "  ", "fr", "de", "zh-TW", "kr", "xx-YY"):
+    def test_missing_language_gives_korean_page(self):
+        for lang in (None, "", "  "):
             with self.subTest(lang=lang):
                 self.assertEqual(uc.feedback_url(SLUG, "0.2.8", lang), KO)
+
+    def test_unknown_language_gives_english_page(self):
+        """10-27 공통 규칙: ko 로 시작하지 않으면 모두 영어 페이지(v0.2.8 까지는 한국어였다)."""
+        for lang in ("fr", "de", "zh-TW", "kr", "xx-YY"):
+            with self.subTest(lang=lang):
+                self.assertEqual(uc.feedback_url(SLUG, "0.2.8", lang), EN)
 
     def test_language_code_case_and_separator(self):
         for lang in ("EN", "En", "JA", "zh-cn", "ZH-CN", "zh_CN", " en "):
@@ -265,7 +271,7 @@ class FeedbackButtonTest(unittest.TestCase):
         self.win.lang = "fr"
         self.click(mock.Mock(return_value=False))
         self.assertIn(self.gui.FEEDBACK_TEXT["ko"]["failed"], self.log_text())
-        self.assertIn(uc.feedback_url(SLUG, __version__, "ko"), self.log_text())
+        self.assertIn(uc.feedback_url(SLUG, __version__, "fr"), self.log_text())   # 페이지는 영어
 
     # e. 문구
     def test_button_shows_the_korean_label(self):
