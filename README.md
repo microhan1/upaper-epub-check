@@ -30,7 +30,8 @@
 
 ### 1) EXE (파이썬 없이)
 최신 EXE 내려받기: https://github.com/microhan1/upaper-epub-check/releases/latest/download/upaper-epub-check.zip
-(zip 을 풀면 `유페이퍼EPUB검수.exe` 와 이 README 가 있습니다. 직접 만들려면 `빌드.bat`.)
+(zip 을 풀면 `유페이퍼EPUB검수.exe` 와 이 README 가 있습니다. 직접 만들려면 `빌드.bat` — `upaper_check.spec` 이 시작 그림 `assets/splash.png` 를 함께 싣습니다. 명령줄로는 `python -m PyInstaller --noconfirm upaper_check.spec`.)
+- EXE 는 켜질 때 압축을 푸느라 몇 초 걸립니다. 그동안 작은 시작 그림(「유페이퍼 EPUB 검수 · 켜는 중…」)이 보이고, 창이 뜨면 사라집니다.
 - **더블클릭하면 창이 뜹니다.** 창 안으로 EPUB 파일을 끌어다 놓으면(여러 개 가능) 바로 검사하고, 결과 요약이 창에 적히면서 `<이름>_검수보고서.html` 이 EPUB 옆에 생기고 브라우저로 열립니다. 드롭 영역을 클릭하면 파일 선택 창이 뜹니다.
 - EPUB 파일을 EXE 아이콘 위로 끌어다 놓아도 됩니다(창 없이 검사 후 보고서를 브라우저로 엽니다).
 - EXE 는 창 모드라 콘솔 출력이 없습니다. 콘솔 출력·`--json` 등 명령줄 기능은 파이썬 소스로 쓰세요.

@@ -5,25 +5,56 @@
   python upaper_check.py 책.epub --html            # 책_검수보고서.html 을 옆에 생성
   python upaper_check.py 책.epub --html 보고서.html --json 결과.json
   python upaper_check.py 책.epub --publisher "내출판사"   # 등록된 출판사인 경우
+
+검사 엔진(lxml·Pillow 를 끄는 epub·checks·report 모듈)은 이 모듈을 불러올 때가 아니라 처음 검사할 때
+load_engine() 으로 불러온다 — 끌어다 놓기 창이 먼저 뜨게 하려고. 창이 뜬 뒤 배경 스레드가 미리 불러 둔다.
 """
 from __future__ import annotations
 
 import argparse
 import os
 import sys
+import threading
+from types import SimpleNamespace
 
-from upaper_check import __version__, epubcheck
-from upaper_check.checks import run_all
-from upaper_check.checks.cover import find_cover_image
-from upaper_check.context import Context, load_rules
-from upaper_check.epub import EpubLoadError, EpubPackage
+from upaper_check import __version__, splash
 from upaper_check.findings import Finding, Level
-from upaper_check.report import Report
 
 AUTO = "auto"
 REPORT_SUFFIX = "_검수보고서"
 SELFTEST_ENV = "UPAPER_SELFTEST"
 EXIT_PASS, EXIT_FAIL, EXIT_LOAD_ERROR = 0, 1, 2
+
+_engine_lock = threading.Lock()
+_engine: SimpleNamespace | None = None
+
+
+def load_engine() -> SimpleNamespace:
+    """검사 엔진 모듈들을 불러와 한 묶음으로 돌려준다. 처음 한 번만 실제로 불러오고, 다른 스레드가
+    불러오는 중이면 끝날 때까지 기다린다 — 창이 뜨자마자 파일을 넣어도 여기서 기다렸다가 검사한다."""
+    global _engine
+    if _engine is not None:
+        return _engine
+    with _engine_lock:
+        if _engine is None:
+            from upaper_check import epubcheck
+            from upaper_check.checks import run_all
+            from upaper_check.checks.cover import find_cover_image
+            from upaper_check.context import Context, load_rules
+            from upaper_check.epub import EpubLoadError, EpubPackage
+            from upaper_check.report import Report
+            _engine = SimpleNamespace(epubcheck=epubcheck, run_all=run_all, find_cover_image=find_cover_image,
+                                      Context=Context, load_rules=load_rules, EpubLoadError=EpubLoadError,
+                                      EpubPackage=EpubPackage, Report=Report)
+    return _engine
+
+
+def preload_engine() -> None:
+    """창이 뜬 직후 배경 스레드에서 미리 불러 둔다. 실패해도 여기서는 넘어가고, 실제 검사 때 다시 불러 오류를 보여 준다."""
+    try:
+        load_engine()
+    except Exception:
+        pass
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -54,6 +85,7 @@ def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if not argv:
         return _run_gui()
+    splash.close()   # 창 없이 검사하는 길: 그림 뒤에 오류 상자가 가리지 않게 바로 닫는다
     parser = build_parser()
     args = parser.parse_args(argv)
     _reject_shared_report_path(parser, args)
@@ -77,14 +109,21 @@ def _reject_shared_report_path(parser: argparse.ArgumentParser, args) -> None:
 
 
 def _run_gui() -> int:
-    """인자 없이 실행(더블클릭): 끌어다 놓기 창을 띄운다."""
+    """인자 없이 실행(더블클릭): 끌어다 놓기 창을 띄운다. 창이 다 그려지면 시작 그림을 닫고 검사 엔진을 배경에서 불러 둔다."""
     from upaper_check import gui
     selftest_target = os.environ.get(SELFTEST_ENV)
     if selftest_target:
-        _report_selftest(gui.selftest(), selftest_target)
+        try:
+            _report_selftest(gui.selftest(), selftest_target)
+        finally:
+            splash.close()
         return EXIT_PASS
-    gui.run_window(check_file_for_gui)
+    gui.run_window(check_file_for_gui, after_shown=_start_preload)
     return EXIT_PASS
+
+
+def _start_preload() -> None:
+    threading.Thread(target=preload_engine, daemon=True).start()
 
 
 def _report_selftest(result: str, target: str) -> None:
@@ -101,20 +140,21 @@ def _windowed() -> bool:
 
 def check_file_for_gui(epub_path: str, rules: dict | None = None) -> tuple[str, str, bool]:
     """창에서 쓰는 검사 함수: HTML 보고서를 EPUB 옆에 쓰고 (요약, 보고서 경로, 오류 없음) 을 돌려준다."""
-    pkg = EpubPackage(epub_path)
-    ctx = Context(pkg, rules or load_rules())
-    findings = run_all(ctx)
-    jar = epubcheck.find_jar(None)
+    eng = load_engine()
+    pkg = eng.EpubPackage(epub_path)
+    ctx = eng.Context(pkg, rules or eng.load_rules())
+    findings = eng.run_all(ctx)
+    jar = eng.epubcheck.find_jar(None)
     if jar:
-        findings.extend(epubcheck.run(epub_path, jar))
-    report = Report(epub_path, findings, _meta_summary(ctx), *_cover_preview(ctx))
+        findings.extend(eng.epubcheck.run(epub_path, jar))
+    report = eng.Report(epub_path, findings, _meta_summary(ctx), *_cover_preview(ctx))
     report_path = _output_path(AUTO, epub_path, ".html")
     _write(report_path, report.to_html())
     return f"{os.path.basename(epub_path)}: {report.summary_line()}", report_path, report.passed
 
 
 def _rules_from_args(args) -> dict:
-    rules = load_rules(args.rules)
+    rules = load_engine().load_rules(args.rules)
     if args.any_publisher:
         rules["publisher_expected"] = ""
     elif args.publisher:
@@ -123,19 +163,20 @@ def _rules_from_args(args) -> dict:
 
 
 def _check_one(epub_path: str, rules: dict, args) -> int:
+    eng = load_engine()
     try:
-        pkg = EpubPackage(epub_path)
-    except EpubLoadError as exc:
+        pkg = eng.EpubPackage(epub_path)
+    except eng.EpubLoadError as exc:
         message = f"[오류] {epub_path}: {exc}"
         print(message)
         if _windowed():
             from upaper_check import gui
             gui.show_message(message)
         return EXIT_LOAD_ERROR
-    ctx = Context(pkg, rules)
-    findings = run_all(ctx)
+    ctx = eng.Context(pkg, rules)
+    findings = eng.run_all(ctx)
     findings.extend(_maybe_epubcheck(epub_path, args))
-    report = Report(epub_path, findings, _meta_summary(ctx), *_cover_preview(ctx))
+    report = eng.Report(epub_path, findings, _meta_summary(ctx), *_cover_preview(ctx))
     _emit(report, epub_path, args)
     return EXIT_PASS if report.passed else EXIT_FAIL
 
@@ -143,6 +184,7 @@ def _check_one(epub_path: str, rules: dict, args) -> int:
 def _maybe_epubcheck(epub_path: str, args) -> list[Finding]:
     if args.no_epubcheck:
         return []
+    epubcheck = load_engine().epubcheck
     jar = epubcheck.find_jar(args.epubcheck)
     if jar is None:
         if args.epubcheck:
@@ -151,7 +193,7 @@ def _maybe_epubcheck(epub_path: str, args) -> list[Finding]:
     return epubcheck.run(epub_path, jar)
 
 
-def _meta_summary(ctx: Context) -> dict:
+def _meta_summary(ctx) -> dict:
     meta = ctx.pkg.metadata
     return {
         "도서명": meta.title,
@@ -166,15 +208,15 @@ def _meta_summary(ctx: Context) -> dict:
     }
 
 
-def _cover_preview(ctx: Context) -> tuple[bytes | None, str]:
-    cover = find_cover_image(ctx)
+def _cover_preview(ctx) -> tuple[bytes | None, str]:
+    cover = load_engine().find_cover_image(ctx)
     if cover is None:
         return None, ""
     path = ctx.path(cover)
     return (ctx.pkg.read(path) if ctx.pkg.exists(path) else None), path
 
 
-def _emit(report: Report, epub_path: str, args) -> None:
+def _emit(report, epub_path: str, args) -> None:
     if args.quiet:
         print(f"{os.path.basename(epub_path)}: {report.summary_line()}")
     else:

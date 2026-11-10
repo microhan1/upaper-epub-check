@@ -32,6 +32,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 - **이미지 전용 판권(COLOPHON-IMAGE) 후보에서 표지를 제외**한다 — 쪽수가 적은 책은 표지가 끝부분 3쪽 안에 들어와 판권 없음(오류)을 수동확인으로 약화시킨다(v0.2.4).
 - 검정 글자색 정규식은 `background-color:#000` 을 잡지 않도록 `(?<![-\w])color` 를 쓴다. 테스트에 회귀 케이스 있음.
 - EXE 빌드는 `upaper_check.spec`(onefile, console=False) — `default_rules.json` 을 `upaper_check/` 밑에 datas 로 싣는다. 경로를 바꾸면 `context.DEFAULT_RULES_PATH` 도 같이.
+- **시작 그림과 늦은 import**(2026-11-10, 책갈피 툴 공통): spec 의 `Splash(assets/splash.png)` 가 압축을 푸는 동안 그림을 띄우고(그림은 `assets/make_splash.py` 로 만든다), `splash.close()` 가 창을 다 그린 뒤(`gui.run_window` 의 finally) 또는 창 없는 길(`cli.main` 의 인자 있는 분기·selftest)에 들어서자마자 닫는다. 검사 엔진(lxml·Pillow 를 끄는 epub·checks·report)은 `cli.load_engine()` 이 처음 쓸 때 불러오고, 창이 뜬 뒤 `preload_engine()` 스레드가 미리 불러 둔다. `cli`·`gui` 모듈을 import 해도 lxml·PIL 이 올라오면 안 된다(`test_startup` 이 확인).
 - **릴리스 절차**: 태그 `vX.Y.Z` 로 `gh release create`, 자산은 **두 개** — 버전 붙은 `upaper-epub-check_vX.Y.Z.zip` 과 버전 없는 `upaper-epub-check.zip`. 블로그·README 는 `releases/latest/download/upaper-epub-check.zip` 고정 주소를 쓰므로 **버전 없는 이름을 빠뜨리면 링크가 깨진다**. 자산 파일명은 영문(한글 파일명은 gh 업로드가 실패함), 표시 이름은 `경로#라벨` 로 한글 가능. 커밋 이메일은 GitHub noreply(저장소 git config 에 설정됨) — 개인 이메일이면 push 가 거부된다.
 
 ## 허브 보고 (사장님 상시 지시 2026-10-22)

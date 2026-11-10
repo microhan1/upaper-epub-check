@@ -14,7 +14,7 @@ from tkinter import filedialog, scrolledtext
 
 from upaper_check import __version__ as APP_VERSION
 from upaper_check import prefs as prefs_mod
-from upaper_check import update_check
+from upaper_check import splash, update_check
 
 try:
     from tkinterdnd2 import DND_FILES, TkinterDnD
@@ -363,8 +363,17 @@ def show_message(text: str) -> None:
     root.destroy()
 
 
-def run_window(check_fn: CheckFn) -> None:
-    DropWindow(check_fn).mainloop()
+def run_window(check_fn: CheckFn, after_shown: Callable[[], None] | None = None) -> None:
+    """창을 다 그린 뒤 exe 시작 그림을 닫고 after_shown(검사 엔진 미리 불러오기 등)을 부른 다음 창이 닫힐 때까지 돈다.
+    창을 만들다 실패해도 시작 그림은 닫는다 — 오류 안내가 그림에 가리지 않게."""
+    try:
+        window = DropWindow(check_fn)
+        window.root.update()
+    finally:
+        splash.close()
+    if after_shown is not None:
+        after_shown()
+    window.mainloop()
 
 
 def selftest() -> str:
